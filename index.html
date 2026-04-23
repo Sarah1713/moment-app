@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MOMENT Logger</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#309394">
+
+</head>
+<body>
+
+<h2>MOMENT Logger</h2>
+
+<button onclick="alert('App funktioniert!')">Test Button</button>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+}
+</script>
+
+</body>
+</html>
