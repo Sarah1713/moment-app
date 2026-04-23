@@ -8,14 +8,181 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#309394">
 
+<style>
+body { font-family: Arial; padding: 20px; background: #ffffff; }
+h2 { color: #309394; }
+
+input {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  margin-bottom: 15px;
+}
+
+button {
+  width: 100%;
+  padding: 20px;
+  font-size: 18px;
+  margin: 10px 0;
+  border-radius: 12px;
+  border: none;
+  background: #f2f2f2;
+}
+
+.start-active { background:#267879; color:white; }
+.stop-active { background:#D96E5E; color:white; }
+.parallel-active { background:#EB897A; color:white; }
+.exclusive-active { background:#309394; color:white; }
+
+.timer-main {
+  font-size: 28px;
+  font-weight: bold;
+  color: #309394;
+}
+
+.timer-saliva {
+  font-size: 22px;
+  font-weight: bold;
+  color: #D96E5E;
+}
+
+.section {
+  margin-top: 30px;
+  border-top: 2px solid #eee;
+  padding-top: 15px;
+}
+</style>
 </head>
+
 <body>
 
 <h2>MOMENT Logger</h2>
 
-<button onclick="alert('App funktioniert!')">Test Button</button>
+<label>ID:</label>
+<input type="text" id="participantID">
+
+<button id="startBtn" onclick="startExperiment()">Start Testung</button>
+<button id="endBtn" onclick="endExperiment()">Ende Testung</button>
+
+<div class="timer-main" id="mainTimer">00:00:00.000</div>
+
+<div class="section">
+<h3 style="color:#EB897A;">Parallele Kanäle</h3>
+<button onclick="toggleParallel('EKG Mama', this)">Start EKG Mama</button>
+<button onclick="toggleParallel('EKG Kind', this)">Start EKG Kind</button>
+</div>
+
+<div class="section exclusive-group">
+<h3 style="color:#309394;">Exklusive Blöcke</h3>
+
+<div class="timer-saliva" id="salivaTimer">Speichel-Timer: 00:00</div>
+
+<button onclick="exclusiveEvent('Speichelprobe T0', true, this)">Speichelprobe T0</button>
+<button onclick="exclusiveEvent('Start Spiel', false, this)">Start Spiel</button>
+<button onclick="exclusiveEvent('Ende Spiel', false, this)">Ende Spiel</button>
+<button onclick="exclusiveEvent('Start Stressor', false, this)">Start Stressor</button>
+<button onclick="exclusiveEvent('Ende Stressor', false, this)">Ende Stressor</button>
+<button onclick="exclusiveEvent('Speichelprobe T2', true, this)">Speichelprobe T2</button>
+<button onclick="exclusiveEvent('Speichelprobe T3', true, this)">Speichelprobe T3</button>
+<button onclick="exclusiveEvent('Speichelprobe T4', true, this)">Speichelprobe T4</button>
+<button onclick="exclusiveEvent('Speichelprobe T5', true, this)">Speichelprobe T5</button>
+</div>
 
 <script>
+let experimentStart=null;
+let experimentEnd=null;
+let salivaStart=null;
+let salivaAlertTriggered=false;
+let parallelChannels={};
+const SALIVA_INTERVAL=20*60*1000;
+
+setInterval(()=>{
+  if(experimentStart&&!experimentEnd){
+    document.getElementById("mainTimer").innerText=formatTime(Date.now()-experimentStart);
+  }
+
+  if(salivaStart&&!experimentEnd){
+    let diff=Date.now()-salivaStart;
+    document.getElementById("salivaTimer").innerText="Speichel-Timer: "+formatShort(diff);
+
+    if(diff>=SALIVA_INTERVAL&&!salivaAlertTriggered){
+      salivaAlertTriggered=true;
+      alert("20 Minuten → Speichelprobe!");
+    }
+  } else {
+    document.getElementById("salivaTimer").innerText="Speichel-Timer: 00:00";
+  }
+
+},100);
+
+function formatTime(ms){
+  let h=Math.floor(ms/3600000);
+  let m=Math.floor((ms%3600000)/60000);
+  let s=Math.floor((ms%60000)/1000);
+  let milli=ms%1000;
+  return `${pad(h)}:${pad(m)}:${pad(s)}.${milli.toString().padStart(3,'0')}`;
+}
+
+function formatShort(ms){
+  let m=Math.floor(ms/60000);
+  let s=Math.floor((ms%60000)/1000);
+  return `${pad(m)}:${pad(s)}`;
+}
+
+function pad(n){return n.toString().padStart(2,'0');}
+
+async function startExperiment(){
+  let id=document.getElementById("participantID").value.trim();
+  if(!id){alert("Bitte ID eingeben");return;}
+  if(experimentStart)return;
+
+  alert("Bitte Flugmodus aktivieren.");
+
+  experimentStart=Date.now();
+  document.getElementById("startBtn").classList.add("start-active");
+
+  if(document.documentElement.requestFullscreen){
+    try{await document.documentElement.requestFullscreen();}catch(e){}
+  }
+
+  if('wakeLock' in navigator){
+    try{await navigator.wakeLock.request('screen');}catch(e){}
+  }
+}
+
+function endExperiment(){
+  if(!experimentStart||experimentEnd)return;
+  experimentEnd=Date.now();
+  document.getElementById("endBtn").classList.add("stop-active");
+  alert("Experiment beendet");
+}
+
+function exclusiveEvent(name,isSaliva,btn){
+  if(!experimentStart){alert("Erst Start drücken");return;}
+
+  document.querySelectorAll(".exclusive-group button")
+    .forEach(b=>b.classList.remove("exclusive-active"));
+
+  btn.classList.add("exclusive-active");
+
+  if(isSaliva){
+    salivaStart=Date.now();
+    salivaAlertTriggered=false;
+  }
+}
+
+function toggleParallel(name,btn){
+  if(!experimentStart){alert("Erst Start drücken");return;}
+
+  if(parallelChannels[name]){
+    parallelChannels[name]=false;
+    btn.classList.remove("parallel-active");
+  }else{
+    parallelChannels[name]=true;
+    btn.classList.add("parallel-active");
+  }
+}
+
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js');
 }
