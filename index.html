@@ -62,16 +62,17 @@ button {
 <input type="text" id="participantID">
 
 <button id="startBtn" onclick="startExperiment()">Start Testung</button>
-<button id="endBtn" onclick="endExperiment()">Ende Testung</button>
 
 <div class="timer-main" id="mainTimer">00:00:00.000</div>
 
+<!-- PARALLEL -->
 <div class="section">
 <h3 style="color:#EB897A;">Parallele Kanäle</h3>
 <button onclick="toggleParallel('EKG Mama', this)">Start EKG Mama</button>
 <button onclick="toggleParallel('EKG Kind', this)">Start EKG Kind</button>
 </div>
 
+<!-- EXKLUSIV -->
 <div class="section exclusive-group">
 <h3 style="color:#309394;">Exklusive Blöcke</h3>
 
@@ -88,13 +89,21 @@ button {
 <button onclick="exclusiveEvent('Speichelprobe T5', true, this)">Speichelprobe T5</button>
 </div>
 
+<!-- ENDE BUTTON GANZ UNTEN -->
+<div class="section">
+<button id="endBtn" onclick="endExperiment()">Ende Testung</button>
+</div>
+
 <script>
 let experimentStart=null;
 let experimentEnd=null;
 let salivaStart=null;
 let salivaAlertTriggered=false;
 let parallelChannels={};
+let eventLog=[];
 const SALIVA_INTERVAL=20*60*1000;
+
+/* ================= TIMER ================= */
 
 setInterval(()=>{
   if(experimentStart&&!experimentEnd){
@@ -115,6 +124,8 @@ setInterval(()=>{
 
 },100);
 
+/* ================= HELPERS ================= */
+
 function formatTime(ms){
   let h=Math.floor(ms/3600000);
   let m=Math.floor((ms%3600000)/60000);
@@ -131,8 +142,23 @@ function formatShort(ms){
 
 function pad(n){return n.toString().padStart(2,'0');}
 
+function nowTime(){
+  let d=new Date();
+  return d.toLocaleTimeString('de-DE') + "." + d.getMilliseconds();
+}
+
+function today(){
+  return new Date().toLocaleDateString('de-DE');
+}
+
+function getID(){
+  return document.getElementById("participantID").value.trim();
+}
+
+/* ================= START ================= */
+
 async function startExperiment(){
-  let id=document.getElementById("participantID").value.trim();
+  let id=getID();
   if(!id){alert("Bitte ID eingeben");return;}
   if(experimentStart)return;
 
@@ -141,21 +167,34 @@ async function startExperiment(){
   experimentStart=Date.now();
   document.getElementById("startBtn").classList.add("start-active");
 
-  if(document.documentElement.requestFullscreen){
-    try{await document.documentElement.requestFullscreen();}catch(e){}
-  }
-
-  if('wakeLock' in navigator){
-    try{await navigator.wakeLock.request('screen');}catch(e){}
-  }
+  logEvent("Start Testung");
 }
+
+/* ================= ENDE ================= */
 
 function endExperiment(){
   if(!experimentStart||experimentEnd)return;
+
   experimentEnd=Date.now();
   document.getElementById("endBtn").classList.add("stop-active");
-  alert("Experiment beendet");
+
+  logEvent("Ende Testung");
+
+  exportCSV(); // 🔥 HIER IST DER FIX
 }
+
+/* ================= EVENTS ================= */
+
+function logEvent(name){
+  eventLog.push({
+    ID:getID(),
+    Kategorie:name,
+    Zeit:nowTime(),
+    Datum:today()
+  });
+}
+
+/* ================= EXKLUSIV ================= */
 
 function exclusiveEvent(name,isSaliva,btn){
   if(!experimentStart){alert("Erst Start drücken");return;}
@@ -165,11 +204,15 @@ function exclusiveEvent(name,isSaliva,btn){
 
   btn.classList.add("exclusive-active");
 
+  logEvent(name);
+
   if(isSaliva){
     salivaStart=Date.now();
     salivaAlertTriggered=false;
   }
 }
+
+/* ================= PARALLEL ================= */
 
 function toggleParallel(name,btn){
   if(!experimentStart){alert("Erst Start drücken");return;}
@@ -177,11 +220,34 @@ function toggleParallel(name,btn){
   if(parallelChannels[name]){
     parallelChannels[name]=false;
     btn.classList.remove("parallel-active");
+    logEvent(name+" STOP");
   }else{
     parallelChannels[name]=true;
     btn.classList.add("parallel-active");
+    logEvent(name+" START");
   }
 }
+
+/* ================= CSV ================= */
+
+function exportCSV(){
+  let id=getID();
+  let todayStr=today().replace(/\./g,"-");
+
+  let csv="ID,Kategorie,Zeit,Datum\n";
+
+  eventLog.forEach(r=>{
+    csv+=`${r.ID},${r.Kategorie},${r.Zeit},${r.Datum}\n`;
+  });
+
+  let blob=new Blob([csv],{type:'text/csv'});
+  let a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=id+"_"+todayStr+".csv";
+  a.click();
+}
+
+/* ================= SERVICE WORKER ================= */
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js');
